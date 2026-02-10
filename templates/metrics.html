@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}Metrics - {{ host.name }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="/hosts">Hosts</a></li>
+                <li class="breadcrumb-item active">{{ host.name }}</li>
+            </ol>
+        </nav>
+        
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4><i class="bi bi-graph-up"></i> Metrics for {{ host.name }}</h4>
+                <div>
+                    <span class="badge {% if host.is_active %}bg-success{% else %}bg-danger{% endif %}">
+                        {% if host.is_active %}Active{% else %}Inactive{% endif %}
+                    </span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>IP Address:</strong> {{ host.ip_address }}</p>
+                        <p><strong>Hostname:</strong> {{ host.hostname or 'N/A' }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>OS:</strong> {{ host.os or 'Unknown' }}</p>
+                        <p><strong>Last Seen:</strong> {{ host.last_seen.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Quick Metrics</h5>
+            </div>
+            <div class="card-body">
+                <div class="row" id="quickMetrics">
+                    <!-- Быстрые метрики загрузятся через AJAX -->
+                    <div class="col text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="chart-container">
+            <h5>Metric Visualization</h5>
+            <div class="mb-3">
+                <select id="metricType" class="form-select">
+                    {% for type in metric_types %}
+                    <option value="{{ type }}">{{ type|upper }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <img id="metricChart" src="" class="img-fluid" alt="Metric Chart">
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Metric History</h5>
+            </div>
+            <div class="card-body">
+                <div id="metricHistory">
+                    <!-- История загрузится через AJAX -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const hostId = {{ host.id }};
+    
+    // Загружаем быстрые метрики
+    function loadQuickMetrics() {
+        fetch(`/api/v1/metrics/summary/${hostId}?hours=1`)
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('quickMetrics');
+                container.innerHTML = '';
+                
+                for (const [metricType, stats] of Object.entries(data)) {
+                    const col = document.createElement('div');
+                    col.className = 'col-md-3 mb-3';
+                    
+                    const bgClass = stats.latest > 80 ? 'bg-danger' : 
+                                   stats.latest > 60 ? 'bg-warning' : 'bg-success';
+                    
+                    col.innerHTML = `
+                        <div class="card text-white ${bgClass} metric-card">
+                            <div class="card-body text-center">
+                                <h6>${metricType.toUpperCase()}</h6>
+                                <h2>${stats.latest.toFixed(1)}${stats.unit}</h2>
+                                <small>Avg: ${stats.avg.toFixed(1)}${stats.unit}</small>
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(col);
+                }
+            });
+    }
+    
+    // Обновляем график
+    function updateChart() {
+        const metricType = document.getElementById('metricType').value;
+        const img = document.getElementById('metricChart');
+        img.src = `/api/v1/plot/${hostId}?type=${metricType}&hours=24&t=${Date.now()}`;
+    }
+    
+    // Загружаем историю
+    function loadHistory() {
+        fetch(`/api/v1/metrics/host/${hostId}?limit=10`)
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('metricHistory');
+                container.innerHTML = '';
+                
+                data.forEach(metric => {
+                    const div = document.createElement('div');
+                    div.className = 'border-bottom py-2';
+                    
+                    const date = new Date(metric.timestamp);
+                    div.innerHTML = `
+                        <small class="text-muted">${date.toLocaleTimeString()}</small><br>
+                        <strong>${metric.metric_type}:</strong> ${metric.value}${metric.unit}
+                    `;
+                    container.appendChild(div);
+                });
+            });
+    }
+    
+    // Инициализация
+    document.getElementById('metricType').addEventListener('change', updateChart);
+    
+    loadQuickMetrics();
+    updateChart();
+    loadHistory();
+    
+    // Автообновление каждые 30 секунд
+    setInterval(loadQuickMetrics, 30000);
+    setInterval(loadHistory, 30000);
+</script>
+{% endblock %}

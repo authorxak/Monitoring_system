@@ -1,0 +1,392 @@
+{% extends "base.html" %}
+
+{% block title %}Charts - Monitoring System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+                <li class="breadcrumb-item active">Charts</li>
+            </ol>
+        </nav>
+        
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="bi bi-bar-chart me-2"></i>Metrics Dashboard</h2>
+            <div class="btn-group">
+                <button class="btn btn-outline-primary" onclick="refreshAllCharts()">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                </button>
+                <button class="btn btn-outline-success" onclick="exportDashboard()">
+                    <i class="bi bi-download me-1"></i>Export
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-gear me-2"></i>Dashboard Settings</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Time Range</label>
+                    <select class="form-select" id="timeRange" onchange="updateAllCharts()">
+                        <option value="1">Last 1 hour</option>
+                        <option value="6">Last 6 hours</option>
+                        <option value="24" selected>Last 24 hours</option>
+                        <option value="168">Last 7 days</option>
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Select Hosts</label>
+                    <select class="form-select" id="hostSelection" multiple onchange="updateAllCharts()">
+                        {% for host in hosts %}
+                        <option value="{{ host.id }}" selected>{{ host.name }} ({{ host.ip_address }})</option>
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted">Hold Ctrl to select multiple hosts</small>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Metrics to Display</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="showCPU" checked onchange="toggleMetric('cpu')">
+                        <label class="form-check-label" for="showCPU">CPU Usage</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="showMemory" checked onchange="toggleMetric('memory')">
+                        <label class="form-check-label" for="showMemory">Memory Usage</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="showDisk" onchange="toggleMetric('disk')">
+                        <label class="form-check-label" for="showDisk">Disk Usage</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="showNetwork" onchange="toggleMetric('network')">
+                        <label class="form-check-label" for="showNetwork">Network</label>
+                    </div>
+                </div>
+                
+                <button class="btn btn-outline-secondary w-100" onclick="resetSettings()">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Reset Settings
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-8">
+        <div class="chart-container mb-4">
+            <h4 class="mb-3"><i class="bi bi-cpu me-2"></i>CPU Usage Comparison</h4>
+            <canvas id="cpuChart" height="150"></canvas>
+        </div>
+        
+        <div class="chart-container mb-4">
+            <h4 class="mb-3"><i class="bi bi-memory me-2"></i>Memory Usage Comparison</h4>
+            <canvas id="memoryChart" height="150"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="chart-container">
+            <h4 class="mb-3"><i class="bi bi-hdd me-2"></i>Disk Usage</h4>
+            <div id="diskCharts"></div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="chart-container">
+            <h4 class="mb-3"><i class="bi bi-wifi me-2"></i>Network Activity</h4>
+            <canvas id="networkChart" height="200"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-table me-2"></i>Raw Metrics Data</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm" id="metricsTable">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Host</th>
+                                <th>Metric</th>
+                                <th>Value</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Данные загрузятся через JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-center mt-3">
+                    <button class="btn btn-outline-primary" onclick="loadMoreMetrics()">
+                        <i class="bi bi-plus-circle me-1"></i>Load More
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let charts = {};
+    let metricsOffset = 0;
+    
+    // Получение выбранных хостов
+    function getSelectedHosts() {
+        const select = document.getElementById('hostSelection');
+        const selected = Array.from(select.selectedOptions).map(opt => opt.value);
+        return selected.length > 0 ? selected : Array.from(select.options).map(opt => opt.value);
+    }
+    
+    // Получение временного диапазона
+    function getTimeRange() {
+        return parseInt(document.getElementById('timeRange').value);
+    }
+    
+    // Обновление всех графиков
+    function updateAllCharts() {
+        updateCPUChart();
+        updateMemoryChart();
+        updateNetworkChart();
+        updateMetricsTable();
+    }
+    
+    // График CPU
+    function updateCPUChart() {
+        const hosts = getSelectedHosts();
+        const hours = getTimeRange();
+        
+        // Если нет выбранных хостов, показываем заглушку
+        if (hosts.length === 0) {
+            const ctx = document.getElementById('cpuChart').getContext('2d');
+            if (charts.cpu) charts.cpu.destroy();
+
+            charts.cpu = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: []
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+            return;
+        }
+
+        // Запрос к API для реальных данных
+        const url = `/api/v1/plot/comparison?host_id=${hosts.join('&host_id=')}&type=cpu&hours=${hours}`;
+        document.getElementById('cpuChart').src = url + '&t=' + Date.now();
+    }
+
+    // График памяти
+    function updateMemoryChart() {
+        const hosts = getSelectedHosts();
+        const hours = getTimeRange();
+
+        if (hosts.length === 0) {
+            const ctx = document.getElementById('memoryChart').getContext('2d');
+            if (charts.memory) charts.memory.destroy();
+
+            charts.memory = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: []
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+            return;
+        }
+
+        const url = `/api/v1/plot/comparison?host_id=${hosts.join('&host_id=')}&type=memory&hours=${hours}`;
+        document.getElementById('memoryChart').src = url + '&t=' + Date.now();
+    }
+
+    // График сети
+    function updateNetworkChart() {
+        const ctx = document.getElementById('networkChart').getContext('2d');
+
+        if (charts.network) {
+            charts.network.destroy();
+        }
+
+        // Тестовые данные
+        const labels = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '23:59'];
+
+        charts.network = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Network In (MB)',
+                    data: [45, 60, 75, 50, 90, 70, 65],
+                    backgroundColor: '#28a745',
+                    borderColor: '#28a745',
+                    borderWidth: 1
+                }, {
+                    label: 'Network Out (MB)',
+                    data: [30, 45, 60, 40, 75, 55, 50],
+                    backgroundColor: '#007bff',
+                    borderColor: '#007bff',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'top' }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'MB'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Таблица метрик
+    function updateMetricsTable() {
+        const hosts = getSelectedHosts();
+        const hours = getTimeRange();
+
+        if (hosts.length === 0) {
+            document.querySelector('#metricsTable tbody').innerHTML =
+                '<tr><td colspan="5" class="text-center">No hosts selected</td></tr>';
+            return;
+        }
+
+        // Загружаем данные для первого выбранного хоста
+        fetch(`/api/v1/metrics/host/${hosts[0]}?hours=${hours}&limit=10`)
+            .then(response => response.json())
+            .then(metrics => {
+                const tbody = document.querySelector('#metricsTable tbody');
+                tbody.innerHTML = '';
+
+                metrics.forEach(metric => {
+                    const row = document.createElement('tr');
+                    const date = new Date(metric.timestamp);
+
+                    // Определяем статус на основе значения
+                    let status = 'success';
+                    let statusText = 'Normal';
+                    if (metric.value > 90) {
+                        status = 'danger';
+                        statusText = 'Critical';
+                    } else if (metric.value > 70) {
+                        status = 'warning';
+                        statusText = 'Warning';
+                    }
+
+                    row.innerHTML = `
+                        <td>${date.toLocaleString()}</td>
+                        <td>Host ${metric.host_id}</td>
+                        <td>${metric.metric_type}</td>
+                        <td><strong>${metric.value}${metric.unit}</strong></td>
+                        <td><span class="badge bg-${status}">${statusText}</span></td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+                if (metrics.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center">No metrics found</td></tr>';
+                }
+            })
+            .catch(error => {
+                console.error('Error loading metrics:', error);
+                document.querySelector('#metricsTable tbody').innerHTML =
+                    '<tr><td colspan="5" class="text-center text-danger">Error loading data</td></tr>';
+            });
+    }
+
+    // Загрузка дополнительных метрик
+    function loadMoreMetrics() {
+        metricsOffset += 10;
+        updateMetricsTable();
+    }
+
+    // Переключение метрики
+    function toggleMetric(metric) {
+        console.log(`Toggled ${metric} metric`);
+        updateAllCharts();
+    }
+
+    // Обновление всех графиков
+    function refreshAllCharts() {
+        updateCPUChart();
+        updateMemoryChart();
+        updateNetworkChart();
+        updateMetricsTable();
+    }
+
+    // Сброс настроек
+    function resetSettings() {
+        document.getElementById('timeRange').value = '24';
+        document.getElementById('hostSelection').selectedIndex = -1;
+        updateAllCharts();
+    }
+
+    // Экспорт дашборда
+    function exportDashboard() {
+        alert('Export feature would generate a PDF report here');
+        // Реализация экспорта в PDF
+    }
+
+    // Инициализация при загрузке страницы
+    document.addEventListener('DOMContentLoaded', function() {
+        // Используем теги img для графиков сравнения
+        const cpuChart = document.getElementById('cpuChart');
+        const memoryChart = document.getElementById('memoryChart');
+
+        if (cpuChart && cpuChart.tagName === 'CANVAS') {
+            updateCPUChart();
+        } else if (cpuChart) {
+            // Если это img элемент, обновляем src
+            cpuChart.onload = function() {
+                this.style.opacity = 1;
+            };
+        }
+
+        if (memoryChart && memoryChart.tagName === 'CANVAS') {
+            updateMemoryChart();
+        }
+
+        updateNetworkChart();
+        updateMetricsTable();
+
+        // Автообновление каждые 30 секунд
+        setInterval(refreshAllCharts, 30000);
+    });
+</script>
+
+{% endblock %}

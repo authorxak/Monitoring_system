@@ -1,0 +1,650 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card bg-primary text-white metric-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title"><i class="bi bi-pc"></i> Total Hosts</h5>
+                        <h2 class="mb-0">{{ total_hosts }}</h2>
+                    </div>
+                    <i class="bi bi-pc display-6 opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+        <div class="card bg-success text-white metric-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title"><i class="bi bi-check-circle"></i> Active Hosts</h5>
+                        <h2 class="mb-0">{{ active_hosts }}</h2>
+                    </div>
+                    <i class="bi bi-check-circle display-6 opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+        <div class="card bg-info text-white metric-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title"><i class="bi bi-clock-history"></i> Uptime</h5>
+                        <h2 class="mb-0">99.8%</h2>
+                    </div>
+                    <i class="bi bi-clock-history display-6 opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+        <div class="card bg-warning text-white metric-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title"><i class="bi bi-exclamation-triangle"></i> Active Alerts</h5>
+                        <h2 class="mb-0" id="alertCount">0</h2>
+                    </div>
+                    <i class="bi bi-exclamation-triangle display-6 opacity-50"></i>
+                </div>
+                <div class="mt-2">
+                    <small>
+                        <span id="criticalAlerts" class="badge bg-danger d-none">0 critical</span>
+                        <a href="/alerts" class="text-white text-decoration-none ms-2">View all →</a>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 🚨 СЕКЦИЯ С АЛЕРТАМИ -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2 text-danger"></i>Security Alerts</h5>
+                <div>
+                    <a href="/alerts" class="btn btn-sm btn-outline-danger me-2">
+                        <i class="bi bi-list"></i> View All
+                    </a>
+                    <button class="btn btn-sm btn-outline-success" onclick="resolveAllAlerts()">
+                        <i class="bi bi-check-all"></i> Resolve All
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div id="recentAlertsContainer">
+                    <!-- Алерты загрузятся через JavaScript -->
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading alerts...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Loading security alerts...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="chart-container">
+            <h4 class="mb-3"><i class="bi bi-activity me-2"></i>System Overview</h4>
+            <canvas id="systemChart" height="200"></canvas>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Recent Metrics</h5>
+                <button class="btn btn-sm btn-outline-primary" onclick="refreshMetrics()">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush" id="recentMetricsList">
+                    {% for metric in recent_metrics %}
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between">
+                            <small class="text-muted">
+                                <i class="bi bi-clock me-1"></i>
+                                {% if metric.timestamp %}
+                                {{ metric.timestamp.strftime('%H:%M:%S') }}
+                                {% else %}
+                                N/A
+                                {% endif %}
+                            </small>
+                            <span class="badge bg-info">{{ metric.metric_type }}</span>
+                        </div>
+                        <div class="mt-1">
+                            {% if metric.host_obj %}
+                            <a href="/metrics/{{ metric.host_obj.id }}" class="text-decoration-none">
+                                <strong>{{ metric.host_obj.name }}</strong>
+                            </a>:
+                            {% else %}
+                            <strong>Host {{ metric.host_id }}</strong>:
+                            {% endif %}
+                            <span class="fw-bold">{{ metric.value }}{{ metric.unit }}</span>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="list-group-item text-center text-muted py-4">
+                        <i class="bi bi-inbox display-6 d-block mb-2"></i>
+                        No metrics yet
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-pc-display me-2"></i>Hosts Overview</h5>
+                <div>
+                    <button class="btn btn-sm btn-outline-warning me-2" onclick="checkAllHostsStatus()">
+                        <i class="bi bi-search"></i> Check Status
+                    </button>
+                    <button class="btn btn-sm btn-outline-success me-2" onclick="pingAllHosts()">
+                        <i class="bi bi-wifi"></i> Ping All
+                    </button>
+                    <a href="/hosts" class="btn btn-sm btn-outline-primary">
+                        View All <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Name</th>
+                                <th>IP Address</th>
+                                <th>Status</th>
+                                <th>Last Seen</th>
+                                <th>OS</th>
+                                <th>Alerts</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for host in hosts %}
+                            {# Вычисляем время с последней активности #}
+                            {% if host.last_seen %}
+                                {% set time_diff = (now - host.last_seen).total_seconds() %}
+                                {% set minutes_ago = (time_diff / 60)|round(1) %}
+                            {% else %}
+                                {% set minutes_ago = 9999 %}
+                            {% endif %}
+
+                            {# Хост активен если был онлайн менее 5 минут назад #}
+                            {% set is_host_active = minutes_ago <= 5 %}
+
+                            {# Считаем открытые алерты для этого хоста #}
+                            {% set alert_count = 0 %}
+                            {% if alerts %}
+                                {% for alert in alerts %}
+                                    {% if alert.host_id == host.id and alert.status == 'open' %}
+                                        {% set alert_count = alert_count + 1 %}
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
+
+                            <tr class="{% if not is_host_active %}table-secondary{% endif %}">
+                                <td>
+                                    <i class="bi bi-pc me-2"></i>
+                                    <a href="/metrics/{{ host.id }}" class="text-decoration-none">
+                                        <strong>{{ host.name }}</strong>
+                                    </a>
+                                    {% if not is_host_active %}
+                                    <span class="badge bg-secondary ms-1" title="Inactive for {{ minutes_ago }} minutes">
+                                        <i class="bi bi-power"></i>
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td><code>{{ host.ip_address }}</code></td>
+                                <td>
+                                    {% if is_host_active %}
+                                    <span class="status-badge bg-success">
+                                        <i class="bi bi-check-circle me-1"></i>Active
+                                        <small class="d-block mt-1">{{ minutes_ago }}m ago</small>
+                                    </span>
+                                    {% else %}
+                                    <span class="status-badge bg-danger">
+                                        <i class="bi bi-x-circle me-1"></i>Inactive
+                                        <small class="d-block mt-1">{{ minutes_ago }}m ago</small>
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if host.last_seen %}
+                                    <small>{{ host.last_seen.strftime('%Y-%m-%d %H:%M:%S') }}</small>
+                                    <br>
+                                    <small class="text-muted">
+                                        {% if is_host_active %}
+                                        <i class="bi bi-clock-history me-1"></i>{{ minutes_ago }}m
+                                        {% else %}
+                                        <i class="bi bi-exclamation-triangle me-1"></i>Offline
+                                        {% endif %}
+                                    </small>
+                                    {% else %}
+                                    <small class="text-muted">Never</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ host.os or 'Unknown' }}</span>
+                                </td>
+                                <td>
+                                    {% if alert_count > 0 %}
+                                    <a href="/alerts?host_id={{ host.id }}" class="badge bg-danger text-decoration-none">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>{{ alert_count }} alert{% if alert_count != 1 %}s{% endif %}
+                                    </a>
+                                    {% elif not is_host_active %}
+                                    <span class="badge bg-warning">
+                                        <i class="bi bi-power me-1"></i>Offline
+                                    </span>
+                                    {% else %}
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-shield-check me-1"></i>OK
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="/metrics/{{ host.id }}" class="btn btn-outline-info" title="View metrics">
+                                            <i class="bi bi-graph-up"></i>
+                                        </a>
+                                        <button class="btn btn-outline-{% if is_host_active %}success{% else %}danger{% endif %}"
+                                                onclick="pingHost({{ host.id }})"
+                                                title="{% if is_host_active %}Ping host{% else %}Host offline{% endif %}">
+                                            <i class="bi bi-wifi"></i>
+                                        </button>
+                                        {% if alert_count > 0 %}
+                                        <a href="/alerts?host_id={{ host.id }}" class="btn btn-outline-danger" title="View alerts">
+                                            <i class="bi bi-exclamation-triangle"></i>
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="7" class="text-center py-4">
+                                    <i class="bi bi-pc display-4 text-muted d-block mb-2"></i>
+                                    <h5 class="text-muted">No hosts registered</h5>
+                                    <p class="text-muted mb-0">Start by deploying monitoring agents</p>
+                                    <a href="/hosts" class="btn btn-primary mt-3">
+                                        <i class="bi bi-plus-circle me-1"></i>Add First Host
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Инициализация графика системы
+    const ctx = document.getElementById('systemChart').getContext('2d');
+    const systemChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '23:59'],
+            datasets: [{
+                label: 'CPU Usage',
+                data: [12, 19, 15, 25, 22, 30, 28],
+                borderColor: '#007bff',
+                backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                tension: 0.4,
+                fill: true
+            }, {
+                label: 'Memory Usage',
+                data: [45, 50, 48, 60, 65, 70, 68],
+                borderColor: '#28a745',
+                backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: {
+                        display: true,
+                        text: 'Usage (%)'
+                    }
+                }
+            }
+        }
+    });
+
+    // Функции для алертов
+    function loadRecentAlerts() {
+        fetch('/api/v1/alerts?status=open&limit=5')
+            .then(response => response.json())
+            .then(alerts => {
+                updateAlertStats(alerts);
+                renderRecentAlerts(alerts);
+            })
+            .catch(error => {
+                console.error('Error loading alerts:', error);
+                document.getElementById('recentAlertsContainer').innerHTML = `
+                    <div class="text-center text-danger py-4">
+                        <i class="bi bi-exclamation-triangle display-4"></i>
+                        <p>Failed to load alerts</p>
+                        <button class="btn btn-sm btn-outline-primary" onclick="loadRecentAlerts()">
+                            Retry
+                        </button>
+                    </div>
+                `;
+            });
+    }
+
+    function updateAlertStats(alerts) {
+        const totalAlerts = alerts.length;
+        const criticalAlerts = alerts.filter(a => a.severity === 'critical').length;
+
+        // Обновляем счетчик на карточке
+        document.getElementById('alertCount').textContent = totalAlerts;
+
+        // Обновляем бейдж критических алертов
+        const criticalBadge = document.getElementById('criticalAlerts');
+        if (criticalAlerts > 0) {
+            criticalBadge.textContent = `${criticalAlerts} critical`;
+            criticalBadge.classList.remove('d-none');
+        } else {
+            criticalBadge.classList.add('d-none');
+        }
+
+        // Обновляем бейдж в навигации
+        const navBadge = document.getElementById('alertBadge');
+        if (totalAlerts > 0) {
+            navBadge.textContent = totalAlerts;
+            navBadge.classList.remove('d-none');
+
+            if (criticalAlerts > 0) {
+                navBadge.classList.add('bg-danger');
+                navBadge.classList.remove('bg-warning');
+            } else {
+                navBadge.classList.add('bg-warning');
+                navBadge.classList.remove('bg-danger');
+            }
+        } else {
+            navBadge.classList.add('d-none');
+        }
+    }
+
+    function renderRecentAlerts(alerts) {
+        const container = document.getElementById('recentAlertsContainer');
+
+        if (alerts.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-5">
+                    <i class="bi bi-shield-check display-4 text-success mb-3"></i>
+                    <h5 class="text-success">No Active Alerts</h5>
+                    <p class="text-muted">All systems are operating normally</p>
+                    <a href="/alerts" class="btn btn-sm btn-outline-success mt-2">
+                        <i class="bi bi-eye me-1"></i>View Alert History
+                    </a>
+                </div>
+            `;
+            return;
+        }
+
+        let html = '<div class="list-group list-group-flush">';
+
+        alerts.forEach(alert => {
+            // Определяем иконку и цвет по уровню серьезности
+            let icon = 'bi-info-circle';
+            let textClass = 'text-info';
+            let bgClass = 'bg-info';
+
+            if (alert.severity === 'critical') {
+                icon = 'bi-exclamation-octagon';
+                textClass = 'text-danger';
+                bgClass = 'bg-danger';
+            } else if (alert.severity === 'warning') {
+                icon = 'bi-exclamation-triangle';
+                textClass = 'text-warning';
+                bgClass = 'bg-warning';
+            }
+
+            // Форматируем время
+            const date = new Date(alert.created_at);
+            const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            const timeAgo = getTimeAgo(date);
+
+            html += `
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center mb-1">
+                                <i class="bi ${icon} ${textClass} me-2"></i>
+                                <h6 class="mb-0 ${textClass}">${alert.title}</h6>
+                                <span class="badge ${bgClass} ms-2">${alert.severity}</span>
+                            </div>
+                            <p class="mb-1 text-muted small">${alert.description}</p>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">
+                                    <i class="bi bi-pc me-1"></i>${alert.host_name || 'Unknown Host'} •
+                                    <i class="bi bi-clock me-1 ms-2"></i>${timeStr} (${timeAgo})
+                                </small>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-success btn-sm" onclick="acknowledgeAlert(${alert.id})">
+                                        <i class="bi bi-check"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger btn-sm" onclick="resolveAlert(${alert.id})">
+                                        <i class="bi bi-x-circle"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += `
+            </div>
+            <div class="text-center py-3 border-top">
+                <a href="/alerts" class="btn btn-sm btn-outline-danger">
+                    <i class="bi bi-list me-1"></i>View All Alerts (${alerts.length})
+                </a>
+            </div>
+        `;
+
+        container.innerHTML = html;
+    }
+
+    function getTimeAgo(date) {
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+
+        if (diffMins < 1) return 'just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+
+        const diffHours = Math.floor(diffMins / 60);
+        if (diffHours < 24) return `${diffHours}h ago`;
+
+        const diffDays = Math.floor(diffHours / 24);
+        return `${diffDays}d ago`;
+    }
+
+    // Управление алертами
+    function acknowledgeAlert(alertId) {
+        if (confirm('Acknowledge this alert?')) {
+            fetch(`/api/v1/alerts/${alertId}/acknowledge`, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    showToast('Alert acknowledged', 'success');
+                    loadRecentAlerts();
+                })
+                .catch(error => {
+                    showToast('Error: ' + error, 'danger');
+                });
+        }
+    }
+
+    function resolveAlert(alertId) {
+        if (confirm('Resolve this alert?')) {
+            fetch(`/api/v1/alerts/${alertId}/resolve`, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    showToast('Alert resolved', 'success');
+                    loadRecentAlerts();
+                })
+                .catch(error => {
+                    showToast('Error: ' + error, 'danger');
+                });
+        }
+    }
+
+    function resolveAllAlerts() {
+        fetch('/api/v1/alerts?status=open')
+            .then(response => response.json())
+            .then(alerts => {
+                if (alerts.length === 0) {
+                    showToast('No open alerts to resolve', 'info');
+                    return;
+                }
+
+                if (confirm(`Resolve all ${alerts.length} open alerts?`)) {
+                    let resolved = 0;
+                    alerts.forEach(alert => {
+                        fetch(`/api/v1/alerts/${alert.id}/resolve`, { method: 'POST' })
+                            .then(() => resolved++)
+                            .catch(() => {});
+                    });
+
+                    setTimeout(() => {
+                        showToast(`Resolved ${resolved} alerts`, 'success');
+                        loadRecentAlerts();
+                    }, 1000);
+                }
+            });
+    }
+
+    // Функции для хостов
+    function checkAllHostsStatus() {
+        fetch('/api/v1/hosts/check-status', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.inactive_hosts && data.inactive_hosts.length > 0) {
+                    showToast(`Found ${data.inactive_hosts.length} inactive hosts`, 'warning');
+                } else {
+                    showToast('All hosts are active', 'success');
+                }
+                // Обновляем страницу через секунду
+                setTimeout(() => location.reload(), 1000);
+            })
+            .catch(error => {
+                showToast('Error checking host status: ' + error, 'danger');
+            });
+    }
+
+    function pingHost(hostId) {
+        fetch(`/api/v1/hosts/${hostId}`)
+            .then(response => response.json())
+            .then(host => {
+                showToast(`Pinging ${host.name} (${host.ip_address})...`, 'info');
+
+                // Имитация пинга
+                setTimeout(() => {
+                    // Проверяем время последней активности
+                    const lastSeen = new Date(host.last_seen);
+                    const now = new Date();
+                    const minutesAgo = (now - lastSeen) / (1000 * 60);
+
+                    if (minutesAgo <= 5) {
+                        showToast(`${host.name} is online (last seen ${Math.round(minutesAgo)} minutes ago)`, 'success');
+                    } else {
+                        showToast(`${host.name} appears to be offline (last seen ${Math.round(minutesAgo)} minutes ago)`, 'warning');
+                    }
+                }, 1000);
+            });
+    }
+
+    function pingAllHosts() {
+        showToast('Pinging all hosts...', 'info');
+        // Можно добавить реальную реализацию
+        setTimeout(() => {
+            showToast('Ping completed', 'success');
+        }, 2000);
+    }
+
+    function refreshMetrics() {
+        // Просто обновляем страницу
+        location.reload();
+    }
+
+    // Вспомогательные функции
+    function showToast(message, type = 'info') {
+        // Простой toast
+        const toast = document.createElement('div');
+        toast.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+        toast.style.cssText = 'top: 20px; right: 20px; z-index: 1050; min-width: 300px;';
+        toast.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+            toast.remove();
+        }, 3000);
+    }
+
+    // Обновление данных графика
+    function updateSystemChart() {
+        // Здесь можно добавить запрос к API для реальных данных
+        console.log('Updating system chart...');
+    }
+
+    // Инициализация при загрузке страницы
+    document.addEventListener('DOMContentLoaded', function() {
+        // Загружаем алерты
+        loadRecentAlerts();
+
+        // Обновляем каждые 30 секунд
+        setInterval(loadRecentAlerts, 30000);
+        setInterval(updateSystemChart, 60000);
+
+        // Автообновление страницы каждые 2 минуты
+        setTimeout(() => {
+            location.reload();
+        }, 120000);
+    });
+</script>
+{% endblock %}

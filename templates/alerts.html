@@ -1,0 +1,491 @@
+{% extends "base.html" %}
+
+{% block title %}Alerts - Monitoring System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+                <li class="breadcrumb-item active">Alerts</li>
+            </ol>
+        </nav>
+        
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="bi bi-exclamation-triangle me-2"></i>Security Alerts</h2>
+            <div>
+                <button class="btn btn-outline-danger" onclick="resolveAllAlerts()">
+                    <i class="bi bi-check-all me-1"></i>Resolve All
+                </button>
+                <button class="btn btn-outline-primary" onclick="refreshAlerts()">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-danger text-white">
+            <div class="card-body">
+                <h5><i class="bi bi-exclamation-octagon"></i> Critical</h5>
+                <h2>{{ critical_alerts }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <h5><i class="bi bi-exclamation-triangle"></i> Open</h5>
+                <h2>{{ open_alerts }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <h5><i class="bi bi-info-circle"></i> Total</h5>
+                <h2>{{ total_alerts }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h5><i class="bi bi-shield-check"></i> Resolved</h5>
+                <h2>{{ total_alerts - open_alerts }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <ul class="nav nav-tabs card-header-tabs">
+                    <li class="nav-item">
+                        <a class="nav-link active" data-bs-toggle="tab" href="#allAlerts">All Alerts</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#critical">Critical</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#attacks">
+                            <i class="bi bi-shield-exclamation"></i> Attacks
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body">
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="allAlerts">
+                        {% if alerts %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Severity</th>
+                                        <th>Host</th>
+                                        <th>Alert</th>
+                                        <th>Description</th>
+                                        <th>Time</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for alert in alerts %}
+                                    <tr class="alert-row" data-alert-id="{{ alert.id }}">
+                                        <td>
+                                            {% if alert.severity == 'critical' %}
+                                            <span class="badge bg-danger">
+                                                <i class="bi bi-exclamation-octagon"></i> Critical
+                                            </span>
+                                            {% elif alert.severity == 'warning' %}
+                                            <span class="badge bg-warning">
+                                                <i class="bi bi-exclamation-triangle"></i> Warning
+                                            </span>
+                                            {% else %}
+                                            <span class="badge bg-info">
+                                                <i class="bi bi-info-circle"></i> Info
+                                            </span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <a href="/metrics/{{ alert.host_id }}">
+                                                <i class="bi bi-pc me-1"></i>{{ alert.host.name if alert.host else 'Unknown' }}
+                                            </a>
+                                        </td>
+                                        <td>
+                                            <strong>{{ alert.title }}</strong>
+                                            <br>
+                                            <small class="text-muted">{{ alert.alert_type }}</small>
+                                        </td>
+                                        <td>{{ alert.description }}</td>
+                                        <td>
+                                            <small>{{ alert.created_at.strftime('%H:%M:%S') }}</small>
+                                            <br>
+                                            <small class="text-muted">{{ alert.created_at.strftime('%Y-%m-%d') }}</small>
+                                        </td>
+                                        <td>
+                                            {% if alert.status == 'open' %}
+                                            <span class="badge bg-danger">Open</span>
+                                            {% elif alert.status == 'acknowledged' %}
+                                            <span class="badge bg-warning">Acknowledged</span>
+                                            {% else %}
+                                            <span class="badge bg-success">Resolved</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                {% if alert.status == 'open' %}
+                                                <button class="btn btn-outline-success" onclick="acknowledgeAlert({{ alert.id }})">
+                                                    <i class="bi bi-check"></i>
+                                                </button>
+                                                {% endif %}
+                                                <button class="btn btn-outline-primary" onclick="viewAlertDetails({{ alert.id }})">
+                                                    <i class="bi bi-eye"></i>
+                                                </button>
+                                                <button class="btn btn-outline-danger" onclick="resolveAlert({{ alert.id }})">
+                                                    <i class="bi bi-x-circle"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-5">
+                            <i class="bi bi-shield-check display-1 text-success mb-3"></i>
+                            <h3 class="text-success">No Active Alerts</h3>
+                            <p class="text-muted">All systems are operating normally</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="tab-pane fade" id="critical">
+                        <!-- Critical alerts will be loaded via JavaScript -->
+                        <div id="criticalAlertsList"></div>
+                    </div>
+                    <div class="tab-pane fade" id="attacks">
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <button class="btn btn-outline-danger mb-2" onclick="testAttacks()">
+                                    <i class="bi bi-bug"></i> Test Attack Detection
+                                </button>
+                                <button class="btn btn-outline-info mb-2" onclick="loadAttackStats()">
+                                    <i class="bi bi-graph-up"></i> Attack Statistics
+                                </button>
+                                <button class="btn btn-outline-warning mb-2" onclick="loadRecentAttacks()">
+                                    <i class="bi bi-clock-history"></i> Recent Attacks
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="attackStats" class="mb-4"></div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover" id="attacksTable">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th>
+                                        <th>Type</th>
+                                        <th>Source IP</th>
+                                        <th>Target Host</th>
+                                        <th>Severity</th>
+                                        <th>Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="attacksList">
+                                    <!-- Атаки будут загружены через JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Alert Details Modal -->
+<div class="modal fade" id="alertDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="alertModalTitle">Alert Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="alertModalBody">
+                <!-- Details will be loaded here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="alertActionBtn">Acknowledge</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Загрузка алертов
+    function loadAlerts() {
+        fetch('/api/v1/alerts')
+            .then(response => response.json())
+            .then(alerts => {
+                updateAlertStats(alerts);
+            });
+    }
+
+    // Подтверждение алерта
+    function acknowledgeAlert(alertId) {
+        fetch(`/api/v1/alerts/${alertId}/acknowledge`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert('Alert acknowledged');
+            location.reload();
+        });
+    }
+
+    // Закрытие алерта
+    function resolveAlert(alertId) {
+        if (confirm('Are you sure you want to resolve this alert?')) {
+            fetch(`/api/v1/alerts/${alertId}/resolve`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert('Alert resolved');
+                location.reload();
+            });
+        }
+    }
+
+    // Просмотр деталей алерта
+    function viewAlertDetails(alertId) {
+        fetch(`/api/v1/alerts/${alertId}`)
+            .then(response => response.json())
+            .then(alert => {
+                document.getElementById('alertModalTitle').textContent = alert.title;
+
+                let html = `
+                    <div class="mb-3">
+                        <h6>Host: ${alert.host_name || 'Unknown'}</h6>
+                        <p><strong>Severity:</strong> <span class="badge bg-${alert.severity}">${alert.severity}</span></p>
+                        <p><strong>Status:</strong> <span class="badge bg-${alert.status === 'open' ? 'danger' : 'success'}">${alert.status}</span></p>
+                        <p><strong>Created:</strong> ${new Date(alert.created_at).toLocaleString()}</p>
+                    </div>
+                    <div class="mb-3">
+                        <h6>Description</h6>
+                        <p>${alert.description}</p>
+                    </div>
+                `;
+
+                if (alert.alert_data) {
+                    html += `
+                        <div class="mb-3">
+                            <h6>Attack Details</h6>
+                            <pre class="bg-light p-3">${JSON.stringify(alert.alert_data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+
+                document.getElementById('alertModalBody').innerHTML = html;
+
+                const modal = new bootstrap.Modal(document.getElementById('alertDetailsModal'));
+                modal.show();
+            });
+    }
+
+    // Обновление всех алертов
+    function resolveAllAlerts() {
+        if (confirm('Resolve all open alerts?')) {
+            fetch('/api/v1/alerts')
+                .then(response => response.json())
+                .then(alerts => {
+                    const openAlerts = alerts.filter(a => a.status === 'open');
+                    if (openAlerts.length === 0) {
+                        alert('No open alerts to resolve');
+                        return;
+                    }
+
+                    const alertIds = openAlerts.map(a => a.id);
+
+                    fetch('/api/v1/alerts/bulk/resolve', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ alert_ids: alertIds })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        alert(`Resolved ${data.message}`);
+                        location.reload();
+                    });
+                });
+        }
+    }
+
+    // Обновление страницы
+    function refreshAlerts() {
+        location.reload();
+    }
+
+    // ==================== ATTACKS FUNCTIONS ====================
+
+    function testAttacks() {
+        fetch('/api/v1/attacks/test', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                alert(`Test completed: ${data.attacks_detected} attacks detected`);
+                loadRecentAttacks();
+                loadAttackStats();
+            });
+    }
+
+    function loadAttackStats() {
+        fetch('/api/v1/attacks/stats')
+            .then(response => response.json())
+            .then(stats => {
+                let html = `
+                    <div class="card">
+                        <div class="card-body">
+                            <h5><i class="bi bi-shield-exclamation"></i> Attack Statistics</h5>
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <h6>Total Attacks:</h6>
+                                        <h2 class="text-danger">${stats.total_attacks}</h2>
+                                    </div>
+                                    <div class="mb-3">
+                                        <h6>Recent (last hour):</h6>
+                                        <h4>${stats.recent_attacks.length}</h4>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>By Type:</h6>
+                                    <ul class="list-group">
+                `;
+
+                for (const [type, count] of Object.entries(stats.by_type)) {
+                    html += `<li class="list-group-item d-flex justify-content-between">
+                                <span>${type}</span>
+                                <span class="badge bg-primary">${count}</span>
+                             </li>`;
+                }
+
+                html += `
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                document.getElementById('attackStats').innerHTML = html;
+            });
+    }
+
+    function loadRecentAttacks() {
+        fetch('/api/v1/alerts?alert_type=attack')
+            .then(response => response.json())
+            .then(alerts => {
+                const attacksList = document.getElementById('attacksList');
+                attacksList.innerHTML = '';
+
+                if (alerts.length === 0) {
+                    attacksList.innerHTML = `
+                        <tr>
+                            <td colspan="6" class="text-center py-4">
+                                <i class="bi bi-shield-check display-4 text-success mb-3"></i>
+                                <h5 class="text-success">No Attack Alerts</h5>
+                                <p class="text-muted">Click "Test Attack Detection" to simulate attacks</p>
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+
+                alerts.forEach(alert => {
+                    const row = document.createElement('tr');
+
+                    // Определяем цвет строки по типу атаки
+                    let rowClass = '';
+                    let severityBadge = '';
+
+                    if (alert.severity === 'critical') {
+                        rowClass = 'table-danger';
+                        severityBadge = `<span class="badge bg-danger">CRITICAL</span>`;
+                    } else if (alert.severity === 'warning') {
+                        rowClass = 'table-warning';
+                        severityBadge = `<span class="badge bg-warning">WARNING</span>`;
+                    } else {
+                        severityBadge = `<span class="badge bg-info">INFO</span>`;
+                    }
+
+                    row.className = rowClass;
+
+                    // Получаем IP атакующего из alert_data
+                    let attackerIp = 'Unknown';
+                    if (alert.alert_data && alert.alert_data.attacker_ip) {
+                        attackerIp = alert.alert_data.attacker_ip;
+                    }
+
+                    // Форматируем время
+                    const time = new Date(alert.created_at);
+                    const timeStr = time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+                    row.innerHTML = `
+                        <td>
+                            ${timeStr}<br>
+                            <small class="text-muted">${time.toLocaleDateString()}</small>
+                        </td>
+                        <td>
+                            <strong>${alert.alert_type || 'attack'}</strong>
+                        </td>
+                        <td>
+                            <code>${attackerIp}</code>
+                        </td>
+                        <td>
+                            ${alert.host_name || 'Unknown Host'}
+                        </td>
+                        <td>${severityBadge}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-info" onclick="viewAlertDetails(${alert.id})">
+                                <i class="bi bi-eye"></i> Details
+                            </button>
+                        </td>
+                    `;
+
+                    attacksList.appendChild(row);
+                });
+            });
+    }
+
+    // Автообновление каждые 30 секунд
+    setInterval(refreshAlerts, 30000);
+
+    // Инициализация при загрузке
+    document.addEventListener('DOMContentLoaded', function() {
+        loadAlerts();
+
+        // Если открыта вкладка Attacks, загружаем статистику
+        const attacksTab = document.querySelector('a[href="#attacks"]');
+        if (attacksTab) {
+            attacksTab.addEventListener('shown.bs.tab', function() {
+                loadAttackStats();
+                loadRecentAttacks();
+            });
+        }
+    });
+</script>
+{% endblock %}
